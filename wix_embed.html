@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador 360° - Wix Integration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: transparent;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .viewer-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 15px;
+            overflow: hidden;
+            border: 2px solid #e9ecef;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .platform {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 250px;
+            height: 250px;
+            border: 3px solid #dee2e6;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(248,249,250,0.5) 70%, transparent 100%);
+            z-index: 1;
+            opacity: 0.8;
+        }
+
+        .platform::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 15px;
+            height: 15px;
+            background: #dee2e6;
+            border-radius: 50%;
+        }
+
+        .image-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            z-index: 5;
+            cursor: grab;
+            transition: transform 0.1s ease-out;
+        }
+
+        .image-container:active {
+            cursor: grabbing;
+        }
+
+        .product-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+        }
+
+        .product-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+            font-size: 14px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .controls::before {
+            content: "←";
+            font-size: 16px;
+            color: #667eea;
+        }
+
+        .controls::after {
+            content: "→";
+            font-size: 16px;
+            color: #667eea;
+        }
+
+        .rotation-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+        }
+
+        .auto-rotate-toggle {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .auto-rotate-toggle:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .auto-rotate-toggle.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #667eea;
+            font-size: 16px;
+            font-weight: 600;
+            z-index: 20;
+            text-align: center;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .image-container {
+                width: 250px;
+                height: 250px;
+            }
+            
+            .platform {
+                width: 200px;
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="viewer-wrapper">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            Carregando...
+        </div>
+        <button class="auto-rotate-toggle" id="autoRotateBtn">⟲ Auto</button>
+        <div class="rotation-indicator" id="rotationIndicator">0°</div>
+        <div class="platform"></div>
+        <div class="image-container" id="imageContainer">
+            <img class="product-image" id="productImage" src="images/frame_01.jpg" alt="Produto 360°">
+        </div>
+        <div class="controls">
+            <span>360°</span>
+        </div>
+    </div>
+
+    <script>
+        class Product360Viewer {
+            constructor() {
+                this.totalFrames = 12;
+                this.currentFrame = 1;
+                this.isDragging = false;
+                this.startX = 0;
+                this.autoRotate = true;
+                this.autoRotateSpeed = 120;
+                this.autoRotateInterval = null;
+                this.imagesLoaded = 0;
+                
+                this.imageContainer = document.getElementById('imageContainer');
+                this.productImage = document.getElementById('productImage');
+                this.rotationIndicator = document.getElementById('rotationIndicator');
+                this.autoRotateBtn = document.getElementById('autoRotateBtn');
+                this.loading = document.getElementById('loading');
+                
+                this.init();
+            }
+            
+            init() {
+                this.preloadImages();
+                this.setupEventListeners();
+                this.startAutoRotate();
+            }
+            
+            preloadImages() {
+                for (let i = 1; i <= this.totalFrames; i++) {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.imagesLoaded++;
+                        if (this.imagesLoaded === this.totalFrames) {
+                            this.loading.style.display = 'none';
+                        }
+                    };
+                    img.src = `images/frame_${i.toString().padStart(2, '0')}.jpg`;
+                }
+            }
+            
+            setupEventListeners() {
+                // Mouse events
+                this.imageContainer.addEventListener('mousedown', this.startDrag.bind(this));
+                document.addEventListener('mousemove', this.drag.bind(this));
+                document.addEventListener('mouseup', this.stopDrag.bind(this));
+                
+                // Touch events
+                this.imageContainer.addEventListener('touchstart', this.startDragTouch.bind(this));
+                document.addEventListener('touchmove', this.dragTouch.bind(this));
+                document.addEventListener('touchend', this.stopDrag.bind(this));
+                
+                // Auto rotate toggle
+                this.autoRotateBtn.addEventListener('click', this.toggleAutoRotate.bind(this));
+                
+                // Prevent context menu
+                this.imageContainer.addEventListener('contextmenu', e => e.preventDefault());
+            }
+            
+            startDrag(e) {
+                this.isDragging = true;
+                this.startX = e.clientX;
+                this.imageContainer.style.cursor = 'grabbing';
+                this.stopAutoRotate();
+                e.preventDefault();
+            }
+            
+            startDragTouch(e) {
+                this.isDragging = true;
+                this.startX = e.touches[0].clientX;
+                this.stopAutoRotate();
+                e.preventDefault();
+            }
+            
+            drag(e) {
+                if (!this.isDragging) return;
+                
+                const deltaX = e.clientX - this.startX;
+                this.updateRotation(deltaX);
+                this.startX = e.clientX;
+            }
+            
+            dragTouch(e) {
+                if (!this.isDragging) return;
+                
+                const deltaX = e.touches[0].clientX - this.startX;
+                this.updateRotation(deltaX);
+                this.startX = e.touches[0].clientX;
+                e.preventDefault();
+            }
+            
+            stopDrag() {
+                this.isDragging = false;
+                this.imageContainer.style.cursor = 'grab';
+            }
+            
+            updateRotation(deltaX) {
+                const sensitivity = 3;
+                const frameChange = Math.round(deltaX / sensitivity);
+                
+                if (frameChange !== 0) {
+                    this.currentFrame += frameChange;
+                    
+                    if (this.currentFrame > this.totalFrames) {
+                        this.currentFrame = 1;
+                    } else if (this.currentFrame < 1) {
+                        this.currentFrame = this.totalFrames;
+                    }
+                    
+                    this.updateImage();
+                    this.updateRotationIndicator();
+                }
+            }
+            
+            updateImage() {
+                const frameNumber = this.currentFrame.toString().padStart(2, '0');
+                this.productImage.src = `images/frame_${frameNumber}.jpg`;
+            }
+            
+            updateRotationIndicator() {
+                const angle = Math.round(((this.currentFrame - 1) / this.totalFrames) * 360);
+                this.rotationIndicator.textContent = `${angle}°`;
+            }
+            
+            startAutoRotate() {
+                if (this.autoRotate && !this.isDragging) {
+                    this.autoRotateInterval = setInterval(() => {
+                        if (!this.isDragging) {
+                            this.currentFrame++;
+                            if (this.currentFrame > this.totalFrames) {
+                                this.currentFrame = 1;
+                            }
+                            this.updateImage();
+                            this.updateRotationIndicator();
+                        }
+                    }, this.autoRotateSpeed);
+                }
+            }
+            
+            stopAutoRotate() {
+                if (this.autoRotateInterval) {
+                    clearInterval(this.autoRotateInterval);
+                    this.autoRotateInterval = null;
+                }
+            }
+            
+            toggleAutoRotate() {
+                this.autoRotate = !this.autoRotate;
+                this.autoRotateBtn.classList.toggle('active', this.autoRotate);
+                
+                if (this.autoRotate) {
+                    this.startAutoRotate();
+                } else {
+                    this.stopAutoRotate();
+                }
+            }
+        }
+        
+        // Initialize viewer when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new Product360Viewer();
+        });
+    </script>
+</body>
+</html>
+
